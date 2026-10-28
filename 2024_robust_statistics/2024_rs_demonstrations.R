@@ -272,7 +272,7 @@ gg_pnull_distr <- pnull %>%
     lwd = 0.75
   )
 
-# computer power (probability of rejecting null when it is true)
+# computer type 1 error rate (probability of rejecting null when it is true)
 round((sum(pnull < 0.05) / 100000), 2) # false positive (type 1 error)
 
 print(gg_pnull_distr)
