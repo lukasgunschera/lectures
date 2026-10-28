@@ -290,7 +290,22 @@ ggsave(
 ## ======================================================================================================================= ##
 # credit to Alex Etz (https://alexanderetz.com/2015/07/25/understanding-bayes-updating-priors-via-the-likelihood/)
 
-# create binary data of 'making threes at a basketball game'
+# The question: what is a basketball player's true probability (theta) of making a three-pointer?
+#
+# We answer it in three ingredients:
+#   1. PRIOR       - what we believe about theta *before* seeing any shots
+#   2. LIKELIHOOD  - how well each possible value of theta explains the shots we actually observed
+#   3. POSTERIOR   - our updated belief: prior x likelihood (rescaled so it integrates to 1)
+#
+# Why the Beta distribution? Each shot is a make (1) or miss (0), so the data are binomial. A Beta prior combined
+# with binomial data always gives a Beta posterior (the Beta is the "conjugate prior" for the binomial).
+
+#   - Beta(1, 1) = 0 makes, 0 misses   -> flat: every theta between 0 and 1 is equally plausible
+#   - Beta(4, 9) = 3 makes, 8 misses
+
+## Data ------------------------------------------------------------------------------------------------------------------ ##
+# 100 three-point attempts: 1 = make, 0 = miss.
+# Laid out as four rows of 25 shots, because below we update our beliefs one batch of 25 at a time.
 shotData <- c(
   1,
   0,
@@ -394,33 +409,47 @@ shotData <- c(
   0
 )
 
-x <- seq(.001, .999, .001) #Set up for creating the distributions
-y2 <- dbeta(x, 1 + 58, 1 + 42) # data for likelihood curve, plotted as the posterior from a be
+# Overall: 58 makes and 42 misses
+sum(shotData) # 58 makes
+length(shotData) # 100 shots
+
+# Observed proportion of makes = 58 / 100 = .58
+# (this is the maximum-likelihood estimate: the single value of theta under which the data are most probable)
+mean(shotData)
+
+## Likelihood curve ------------------------------------------------------------------------------------------------------ ##
+# Grid of candidate values for theta.
+x <- seq(.001, .999, .001)
+
+# Likelihood of 58 makes and 42 misses at each candidate theta. The likelihood has exactly the shape of a
+# Beta(1 + 58, 1 + 42) density.
+
+y2 <- dbeta(x, 1 + 58, 1 + 42)
 
 # probability of success (three pointer)
 sum(shotData == 1) / sum(shotData == 0) + sum(shotData == 1)
 
-# show likelihood curve for above data
 plot(
-  seq(.001, .999, .001),
-  dbeta(x, 1 + 58, 1 + 42),
-  xlim = c(0, 1),
-  ylim = c(0, 1.25 * max(dbeta(x, 1 + 58, 1 + 42), 1.6)),
+  x,
+  y2,
   type = "l",
-  ylab = "Density",
   lty = 3,
+  lwd = 2,
+  col = "darkorange", # dotted orange line
+  xlim = c(0, 1),
+  ylim = c(0, 1.25 * max(y2, 1.6)), # 25% headroom above the peak
   xlab = "Probability of success",
-  las = 1,
+  ylab = "Density",
   main = "Likelihood Curve for 3-pt Shots",
   sub = "(Binomial Data, 58/100)",
-  lwd = 2,
+  las = 1,
   cex.lab = 1.5,
   cex.main = 1.5,
-  col = "darkorange",
-  axes = FALSE
+  axes = FALSE # axes drawn manually below
 )
-axis(1, at = seq(0, 1, .2)) # adds custom x axis
-axis(2, las = 1) # custom y axis
+axis(1, at = seq(0, 1, .2)) # x axis with ticks at 0, .2, .4, ... 1
+axis(2, las = 1) # y axis with horizontal labels
+# The peak sits at .58 (the observed proportion); the width shows how uncertain 100 shots leave us.
 
 ## Plot function --------------------------------------------------------------------------------------------------------- ##
 # @ PS = prior successes (input to beta distribution)
@@ -429,31 +458,45 @@ axis(2, las = 1) # custom y axis
 # @ null = point null hypothesis (default = NULL)
 # @ CI = credibility interval (.95 default)
 
-## Uniform Prior --------------------------------------------------------------------------------------------------------- ##
+## Updating from a uniform (flat) prior ---------------------------------------------------------------------------------- ##
+# Start knowing nothing: every success rate from 0 to 1 is equally plausible.
 plot.beta(1, 1, ymax = 3.2, main = "Uniform Prior, Beta(1,1)")
 
-# miss or make next one?
-#plot.beta(1, 1, 1, 1, ymax = 3.2, main = "Uniform Prior, Beta(1,1)")
-#plot.beta(1, 1, 0, 1, ymax = 3.2, main = "Uniform Prior, Beta(1,1)")
+# Now feed in the data 25 shots at a time. Each posterior becomes the prior for the next batch.
 
-# observe 13 threes and 12 fails
-plot.beta(1, 1, 1, 1, main = "Beta(1,1) to Beta(14,13)", ymax = 10)
+# Shots 1-25: 13 makes, 12 misses -> Beta(1 + 13, 1 + 12)
+plot.beta(1, 1, 13, 25, ymax = 10, main = "Beta(1,1) to Beta(14,13)")
 
-# observe another 12 threes and 13 fails
+# Shots 26-50: 12 makes, 13 misses -> Beta(14 + 12, 13 + 13)
 plot.beta(14, 13, 12, 25, ymax = 10, main = "Beta(14,13) to Beta(26,26)")
 
-# observe another 23 threes and 17 fails
-plot.beta(40, 37, 19, 25, ymax = 10, main = "Beta(40,37) to Beta(59,43)")
-plot.beta(1, 1, 58, 100, ymax = 10, main = "Beta(1,1) to Beta(59,43)") # after 100 throws
+# Shots 51-75: 14 makes, 11 misses -> Beta(26 + 14, 26 + 11)
+plot.beta(26, 26, 14, 25, ymax = 10, main = "Beta(26,26) to Beta(40,37)")
 
-## Informed/biased Prior ------------------------------------------------------------------------------------------------- ##
+# Shots 76-100: 19 makes, 6 misses -> Beta(40 + 19, 37 + 6)
+plot.beta(40, 37, 19, 25, ymax = 10, main = "Beta(40,37) to Beta(59,43)")
+
+# Key point: updating in batches gives the same answer as using all 100 shots at once (58 makes, 42 misses).
+# The final posterior is identical to the likelihood curve above, because a flat prior adds no information.
+plot.beta(1, 1, 58, 100, ymax = 10, main = "Beta(1,1) to Beta(59,43)")
+
+
+## Updating from an informed (sceptical) prior --------------------------------------------------------------------------- ##
+# Now start with a belief that the player is fairly poor (~31% success), held about as strongly as if we had
+# already watched 11 shots (3 makes, 8 misses).
 plot.beta(4, 9, ymax = 3.2, main = "Informed Prior, Beta(4,9)")
 
-# miss or make next one?
+# One make -> Beta(5,9). The shift is smaller than under the flat prior, because the prior already carries weight.
 plot.beta(4, 9, 1, 1, ymax = 3.2, main = "Informed Prior, Beta(4,9)")
 
-plot.beta(4, 9, 13, 25, main = "Beta(4,9) to Beta(17,21)", ymax = 10)
-plot.beta(17, 21, 12, 25, ymax = 10, main = "Beta(17,21) to Beta(29,34)")
-plot.beta(29, 34, 14, 25, ymax = 10, main = "Beta(29,34) to Beta(43,45)")
-plot.beta(43, 45, 19, 25, ymax = 10, main = "Beta(43,45) to Beta(62,51)")
-plot.beta(4, 9, 58, 100, ymax = 10, main = "Beta(4,9) to Beta(62,51)") # after 100 throws
+# Same four batches of 25 shots as before:
+plot.beta(4, 9, 13, 25, ymax = 10, main = "Beta(4,9) to Beta(17,21)") # shots   1-25: 13 makes
+plot.beta(17, 21, 12, 25, ymax = 10, main = "Beta(17,21) to Beta(29,34)") # shots  26-50: 12 makes
+plot.beta(29, 34, 14, 25, ymax = 10, main = "Beta(29,34) to Beta(43,45)") # shots  51-75: 14 makes
+plot.beta(43, 45, 19, 25, ymax = 10, main = "Beta(43,45) to Beta(62,51)") # shots 76-100: 19 makes
+
+# All 100 shots at once gives the same endpoint.
+# Compare with the flat-prior result: Beta(62,51) has mean 62/113 = .55 vs .58 for Beta(59,43).
+# With enough data the two posteriors converge - the data come to dominate the prior - but the sceptical
+# prior still pulls the estimate slightly downwards after 100 shots.
+plot.beta(4, 9, 58, 100, ymax = 10, main = "Beta(4,9) to Beta(62,51)")
