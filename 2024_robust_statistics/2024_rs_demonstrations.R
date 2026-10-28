@@ -18,48 +18,69 @@ source(here::here("2024_robust_statistics", "2024_rs_dependencies.R"))
 ## P-VALUE DISTRIBUTION
 ## ======================================================================================================================= ##
 
-## Effect 1 -------------------------------------------------------------------------------------------------------------- ##
-# set parameters for simulated experiments
-nexp <- 10000 # number of experiments
-nsample <- 71 # sample size of both groups
-m1 <- 100 # mean of group 1
-m2 <- 105 # mean of group 2
-sd1 <- 15 # standard deviation of group 1
-sd2 <- 15 # standard deviation of group 2
+# The idea: instead of running one experiment, we run the *same* experiment 10,000 times on simulated data and look at
+# the p-values we get. This shows that a p-value is a random variable: its distribution depends on whether a true
+# effect exists and, if it does, on how much power the study has to detect it.
+#
+# Each simulated experiment compares two independent groups with a t-test (e.g. an IQ-like score, mean 100, SD 15).
+#
+# Power depends on the standardised effect size, d = (mean difference) / SD, and on the sample size.
+#   Effect 1: baseline                d = 5/15 = .33, n = 71 per group    -> power ~ .50
+#   Effect 2: larger sample           d = 5/15 = .33, n = 127 per group   -> power ~ .75
+#   Effect 3: less noise (smaller SD) d = 5/10 = .50, n = 127 per group   -> power ~ .98
+#   Effect 4: no true effect          d = 0,          n = 127 per group   -> "power" = Type I error ~ .05
+#
 
-# set empty vector for storing experiment results
-p1 <- numeric(10000)
+## Effect 1: a true effect with ~50% power ------------------------------------------------------------------------------- ##
+# Simulation settings
+nexp <- 10000 # number of simulated experiments
+nsample <- 71 # participants per group
+m1 <- 100 # population mean of group 1
+m2 <- 105 # population mean of group 2 (true difference = 5 points)
+sd1 <- 15 # population SD of group 1
+sd2 <- 15 # population SD of group 2
 
+# Reference line for the histograms: how many p-values each of the 20 bars would contain if the null were true
+null_bin_height <- nexp / 20
+
+# Empty vector to hold one p-value per simulated experiment
+p1 <- numeric(nexp)
+
+# Run the experiment nexp times. On each run we draw a fresh random sample for both groups from the populations
+# defined above, run a t-test, and keep only its p-value.
 for (i in 1:nexp) {
-  x1 <- rnorm(n = nsample, mean = m1, sd = sd1) # Simulate data
-  y1 <- rnorm(n = nsample, mean = m2, sd = sd2) # Simulate data
-  p1[i] <- t.test(x1, y1)$p.value # store the *p*-value
+  x1 <- rnorm(n = nsample, mean = m1, sd = sd1) # sample for group 1
+  y1 <- rnorm(n = nsample, mean = m2, sd = sd2) # sample for group 2
+  p1[i] <- t.test(x1, y1)$p.value # Welch t-test (R's default); store the p-value
 }
 
-# computer power (probability of rejecting null when it is false)
-(sum(p1 < 0.05) / nexp)
+# Power = proportion of experiments with p < .05, i.e. how often we correctly reject the (false) null hypothesis.
+# Expect ~.50: with this effect size and sample size, half of all studies would miss a real effect.
+mean(p1 < 0.05)
 
-gg_p1_distr <- p1 %>%
-  data.frame(pvals = p1) %>%
-  ggplot(., aes(x = pvals)) +
+# Histogram of the 10,000 p-values
+gg_p1_distr <- data.frame(pvals = p1) %>%
+  ggplot(aes(x = pvals)) +
   geom_histogram(
-    breaks = seq(0, 1, by = 0.05),
+    breaks = seq(0, 1, by = 0.05), # 20 bins, each .05 wide, so the first bin is exactly p < .05
     color = "#2E2E2E",
     alpha = 0.7,
-    aes(fill = pvals < 0.05)
+    aes(fill = pvals < 0.05) # colour significant vs non-significant p-values differently
   ) +
-  scale_y_continuous(limits = c(0, nexp)) +
+  scale_y_continuous(limits = c(0, nexp)) + # fixed y axis so the plots of all four effects are comparable
   scale_x_continuous(breaks = seq(0, 1, .1)) +
   labs(x = "p-value", y = "Number of p-values") +
   plot_theme +
   aspect_ratio_balanced +
   scale_fill_viridis_d(direction = -1) +
+  # Dashed line: expected bar height if there were no true effect (uniform p-values)
   geom_hline(
-    yintercept = 5000,
+    yintercept = null_bin_height,
     color = "red",
     linetype = "dashed",
-    size = .25
+    linewidth = .25
   ) +
+  # Draw the x and y axis lines manually (x axis from 0 to 1, y axis from 0 to nexp)
   annotate(
     geom = "segment",
     x = 0,
@@ -67,16 +88,16 @@ gg_p1_distr <- p1 %>%
     y = -Inf,
     yend = -Inf,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   ) +
   annotate(
     geom = "segment",
     x = -Inf,
     xend = -Inf,
     y = 0,
-    yend = 100000,
+    yend = nexp,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   )
 
 print(gg_p1_distr)
@@ -89,25 +110,25 @@ ggsave(
   device = "png"
 )
 
-## Effect 2 -------------------------------------------------------------------------------------------------------------- ##
-# increase sample size
-nsample <- nsample + 56 # increase sample size of both groups
+## Effect 2: same effect, larger sample ---------------------------------------------------------------------------------- ##
+# Increase the sample size from 71 to 127 per group. The true difference (5) and the SD (15) are unchanged,
+# so the effect size is the same (d = .33). More data means less sampling error, so p-values cluster closer to 0.
+nsample <- nsample + 56 # 71 + 56 = 127 per group
 
-p2 <- numeric(nexp) # store all simulated *p*-values
+p2 <- numeric(nexp)
 
 for (i in 1:nexp) {
-  # for each simulated experiment
-  x2 <- rnorm(n = nsample, mean = m1, sd = sd1) # Simulate data
-  y2 <- rnorm(n = nsample, mean = m2, sd = sd2) # Simulate data
-  p2[i] <- t.test(x2, y2)$p.value # store the *p*-value
+  x2 <- rnorm(n = nsample, mean = m1, sd = sd1)
+  y2 <- rnorm(n = nsample, mean = m2, sd = sd2)
+  p2[i] <- t.test(x2, y2)$p.value
 }
 
-# computer power (probability of rejecting null when it is false)
-round((sum(p2 < 0.05) / nexp), 2)
+# Power: expect ~.75, up from ~.50
+round(mean(p2 < 0.05), 2)
 
-gg_p2_distr <- p2 %>%
-  data.frame(pvals = p2) %>%
-  ggplot(., aes(x = pvals)) +
+# Same plot as Effect 1
+gg_p2_distr <- data.frame(pvals = p2) %>%
+  ggplot(aes(x = pvals)) +
   geom_histogram(
     breaks = seq(0, 1, by = 0.05),
     color = "#2E2E2E",
@@ -121,10 +142,10 @@ gg_p2_distr <- p2 %>%
   aspect_ratio_balanced +
   scale_fill_viridis_d(direction = -1) +
   geom_hline(
-    yintercept = 5000,
+    yintercept = null_bin_height,
     color = "red",
     linetype = "dashed",
-    size = .25
+    linewidth = .25
   ) +
   annotate(
     geom = "segment",
@@ -133,16 +154,16 @@ gg_p2_distr <- p2 %>%
     y = -Inf,
     yend = -Inf,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   ) +
   annotate(
     geom = "segment",
     x = -Inf,
     xend = -Inf,
     y = 0,
-    yend = 100000,
+    yend = nexp,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   )
 
 print(gg_p2_distr)
@@ -155,26 +176,26 @@ ggsave(
   device = "png"
 )
 
-## Effect 3 -------------------------------------------------------------------------------------------------------------- ##
-# decrease standard deviation
-sd1 <- sd1 - 5 # standard deviation of group 1
-sd2 <- sd2 - 5 # standard deviation of group 2
+## Effect 3: same difference, less noise --------------------------------------------------------------------------------- ##
+# Reduce the SD of both groups from 15 to 10 (e.g. a more reliable measure), keeping n = 127 per group.
+# The raw difference is still 5 points, but relative to the noise it is now larger: d = 5/10 = .50.
+sd1 <- sd1 - 5 # 15 - 5 = 10
+sd2 <- sd2 - 5 # 15 - 5 = 10
 
-p2 <- numeric(nexp) # store all simulated *p*-values
+p3 <- numeric(nexp)
 
 for (i in 1:nexp) {
-  # for each simulated experiment
-  x2 <- rnorm(n = nsample, mean = m1, sd = sd1) # Simulate data
-  y2 <- rnorm(n = nsample, mean = m2, sd = sd2) # Simulate data
-  p2[i] <- t.test(x2, y2)$p.value # store the *p*-value
+  x3 <- rnorm(n = nsample, mean = m1, sd = sd1)
+  y3 <- rnorm(n = nsample, mean = m2, sd = sd2)
+  p3[i] <- t.test(x3, y3)$p.value
 }
 
-# computer power (probability of rejecting null when it is false)
-round((sum(p2 < 0.05) / nexp), 2)
+# Power: expect ~.98, nearly every experiment detects the effect
+round(mean(p3 < 0.05), 2)
 
-gg_p2_distr <- p2 %>%
-  data.frame(pvals = p2) %>%
-  ggplot(., aes(x = pvals)) +
+# Same plot as Effect 1
+gg_p3_distr <- data.frame(pvals = p3) %>%
+  ggplot(aes(x = pvals)) +
   geom_histogram(
     breaks = seq(0, 1, by = 0.05),
     color = "#2E2E2E",
@@ -188,10 +209,10 @@ gg_p2_distr <- p2 %>%
   aspect_ratio_balanced +
   scale_fill_viridis_d(direction = -1) +
   geom_hline(
-    yintercept = 5000,
+    yintercept = null_bin_height,
     color = "red",
     linetype = "dashed",
-    size = .25
+    linewidth = .25
   ) +
   annotate(
     geom = "segment",
@@ -200,46 +221,50 @@ gg_p2_distr <- p2 %>%
     y = -Inf,
     yend = -Inf,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   ) +
   annotate(
     geom = "segment",
     x = -Inf,
     xend = -Inf,
     y = 0,
-    yend = 100000,
+    yend = nexp,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   )
 
-print(gg_p2_distr)
+print(gg_p3_distr)
 
 ggsave(
-  gg_p2_distr,
+  gg_p3_distr,
   path = here::here("2024_robust_statistics", "images"),
-  filename = "rs_pvalue_p2_distr.png",
+  filename = "rs_pvalue_p3_distr.png",
   dpi = 1200,
   device = "png"
 )
 
-## Effect 4 -------------------------------------------------------------------------------------------------------------- ##
-# change group means to be equivalent
-m2 <- 100 # mean of group 2
-sd1 <- 15 # standard deviation of group 1
-sd2 <- 15 # standard deviation of group 2
+## Effect 4: no true effect (the null hypothesis is true) ---------------------------------------------------------------- ##
+# Make both population means equal (100 vs 100) and restore SD = 15. Sample size stays at 127 per group.
+# Any "significant" result now is a false positive.
+m2 <- 100 # group 2 now has the same mean as group 1
+sd1 <- 15
+sd2 <- 15
 
-pnull <- numeric(nexp) # store all simulated *p*-values
+pnull <- numeric(nexp)
 
 for (i in 1:nexp) {
-  # for each simulated experiment
-  xnull <- rnorm(n = nsample, mean = m1, sd = sd1) # Simulate data
-  ynull <- rnorm(n = nsample, mean = m2, sd = sd2) # Simulate data
-  pnull[i] <- t.test(xnull, ynull)$p.value # store the *p*-value
+  xnull <- rnorm(n = nsample, mean = m1, sd = sd1)
+  ynull <- rnorm(n = nsample, mean = m2, sd = sd2)
+  pnull[i] <- t.test(xnull, ynull)$p.value
 }
 
-gg_pnull_distr <- pnull %>%
-  data.frame(pvals = pnull) %>%
-  ggplot(., aes(x = pvals)) +
+# Type I error rate = proportion of p < .05 when the null is true. Expect ~.05, i.e. alpha.
+round(mean(pnull < 0.05), 2)
+
+# Same plot as Effect 1. Here the bars should all sit roughly on the dashed line: p-values are uniformly distributed,
+# so p = .01 is no more likely than p = .81.
+gg_pnull_distr <- data.frame(pvals = pnull) %>%
+  ggplot(aes(x = pvals)) +
   geom_histogram(
     breaks = seq(0, 1, by = 0.05),
     color = "#2E2E2E",
@@ -252,7 +277,12 @@ gg_pnull_distr <- pnull %>%
   plot_theme +
   aspect_ratio_balanced +
   scale_fill_viridis_d(direction = -1) +
-  geom_hline(yintercept = 50, color = "red", linetype = "dashed", size = .25) +
+  geom_hline(
+    yintercept = null_bin_height,
+    color = "red",
+    linetype = "dashed",
+    linewidth = .25
+  ) +
   annotate(
     geom = "segment",
     x = 0,
@@ -260,20 +290,17 @@ gg_pnull_distr <- pnull %>%
     y = -Inf,
     yend = -Inf,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   ) +
   annotate(
     geom = "segment",
     x = -Inf,
     xend = -Inf,
     y = 0,
-    yend = 100000,
+    yend = nexp,
     colour = "#2E2E2E",
-    lwd = 0.75
+    linewidth = 0.75
   )
-
-# computer type 1 error rate (probability of rejecting null when it is true)
-round((sum(pnull < 0.05) / 100000), 2) # false positive (type 1 error)
 
 print(gg_pnull_distr)
 
