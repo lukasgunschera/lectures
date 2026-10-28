@@ -1,5 +1,5 @@
 ## ======================================================================================================================= ##
-## Script:       INTERACTIVE CODE COURSE COMPONENTS FOR 2024 ROBUST STATISTICS
+## Script:       INTERACTIVE CODE COURSE COMPONENTS FOR 2026 ROBUST STATISTICS
 ## ======================================================================================================================= ##
 ## Authors:      Lukas Gunschera
 ## Contact:      l.gunschera@outlook.com
