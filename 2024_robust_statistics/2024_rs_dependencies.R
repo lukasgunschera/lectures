@@ -7,10 +7,10 @@
 ##
 ## ============================================================================================================================ ##
 
-# install.packages("here")
-# install.packages("dplyr")
-# install.packages("ggplot2")
-# install.packages("magrittr")
+install.packages("here")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("magrittr")
 
 library(here)
 library(dplyr)
